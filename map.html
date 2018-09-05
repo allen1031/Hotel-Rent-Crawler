@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html class='use-all-space'>
+
+<head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta charset='UTF-8'>
+    <title>My Map</title>
+    <meta name='viewport' content='width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no' />
+    <link rel='stylesheet' type='text/css' href='sdk/map.css' />
+    <link rel='stylesheet' type='text/css' href='elements.css' />
+    <script type='text/javascript' src='js/form.js'></script>
+    <script type='text/javascript' src='sdk/tomtom.min.js'></script>
+	<script type="text/javascript" src="http://code.jquery.com/jquery-1.7.1.min.js"></script>
+	
+  
+	<style>
+        .input-container label {
+            display: flex;
+            align-items: center;
+            margin: 2px;
+        }
+
+        .input-container select {
+            flex: auto;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+
+<body class='use-all-space'>
+    <div class='map-container use-all-space'>
+        <div id='map' style='height:700px;width:1500px' class='use-all-space'></div>
+		 
+		<div class="control-entry">
+            <label>Load the houses file</label>
+            <div class="control-input">
+                <input type="file" name="file" onChange="importRentInfo(this)" />
+            </div>
+        </div>
+		
+		
+    </div>
+	
+	
+    <script>
+			/************************************  Map Drawing   ************************************/
+            // Define your product name and version
+            tomtom.setProductInfo('My_Map@localhost:8080', 'V_1.0');
+            // Setting TomTom keys
+            tomtom.searchKey('4r6j0h0dazoCG1hS73VF5HPbHWKjzMFI');
+
+            // Creating map
+            var map = tomtom.L.map('map', {
+                key: '4r6j0h0dazoCG1hS73VF5HPbHWKjzMFI',
+                source: 'vector',
+                basePath: '/sdk'
+            });
+			
+			/* Control Panel For Selecting Traffic Path*/
+            var controlPanel = tomtom.controlPanel({
+                position: 'bottomright',
+                title: 'Map Plan',
+                collapsed: true
+            }).addTo(map);
+			
+            /* Zoom Option */
+            map.zoomControl.setPosition('bottomleft');
+
+            /************************************ Autocomplete Positioning ************************************/
+            var searchBoxInstance = tomtom.searchBox({
+                position: 'topright',
+                language: 'en-GB', // optional
+                //imperialDistance: unitSelector.value === 'imperial', // FALSE by default
+                serviceOptions: {unwrapBbox: true}
+            }).addTo(map);
+				
+			controlPanel.addContent(searchBoxInstance);
+
+            // Marker layer to indicate the center of the search
+            var searchCenterLayer = tomtom.markersView()
+                .addTo(map);
+
+            // Marker layer to display the results over the map
+            var markersLayer = L.tomTomMarkersLayer().addTo(map);
+			var marker;
+            // Draw markers for all the results found by the searchBox control (before user selects one)
+            searchBoxInstance.on(searchBoxInstance.Events.ResultsFound, function(results) {
+                drawSearchCenter();
+                markersLayer.setMarkersData(results.data)
+                    .addMarkers();
+            });
+            searchBoxInstance.on(searchBoxInstance.Events.ResultsCleared, function() {
+                markersLayer.clearLayers();
+            });
+
+            // Add a marker to indicate the position of the result selected by the user
+            searchBoxInstance.on(searchBoxInstance.Events.ResultClicked, function(result) {
+                markersLayer.setMarkersData([result.data])
+                    .addMarkers();
+
+                var viewport = result.data.viewport;
+                if (viewport) {
+                    map.fitBounds([viewport.topLeftPoint, viewport.btmRightPoint]);
+                } else {
+                    map.fitBounds(markersLayer.getBounds());
+                }
+            });
+
+            // Draw a marker at the center of the map
+            function drawSearchCenter() {
+                var currentLocation = map.getCenter();
+                var markerOptions = {
+                    title: 'Search Center\nLatitude: ' + currentLocation.lat + '\nLongitude: ' + currentLocation.lng,
+                    icon: tomtom.L.icon({
+                        iconUrl: '/sdk/../img/center_marker.svg',
+                        iconSize: [24, 24],
+                        iconAnchor: [12, 12]
+                    })
+                };
+                searchCenterLayer.clearLayers();
+                searchCenterLayer.addLayer(
+                    tomtom.L.marker([currentLocation.lat, currentLocation.lng], markerOptions)
+                ).addTo(map);
+            }
+			
+			
+			/************************************ Load the House Info************************************/
+			var resultsList = tomtom.resultsList()
+                .addTo(map);
+            
+
+            var markersLayer = L.tomTomMarkersLayer().addTo(map);
+			
+			// Input the rent house info
+			function importRentInfo(fileInfo) {
+				var file = fileInfo.files[0].name;
+				console.log("get the hotel list ",file);
+				$(document).ready(function() {
+					$.ajax({
+						type: "GET",
+						url: "./rent.csv",
+						dataType: "text",
+						success: function(data) {processData(data,13);}
+					 });
+				});
+				
+				//var data = Papa.parse(file);
+				//processData(data,13);
+			}
+			
+			
+			function processData(data,zoom) {
+				//delRentLocation();
+				var rent_locations = new Set();
+				
+				data = data.split('\r\n');
+				console.log("we search for the rent hotel");
+				console.log("house number: ",data.length-1);
+				
+				
+				
+				for (var i=0; i<data.length-1; i++ ){
+					
+					var Lat = parseFloat(data[i].split(",")[2]);
+					var Lon = parseFloat(data[i].split(",")[1].substring(1,));
+					var popupContent = data[i].split(",")[0];
+					
+					console.log("content: ",popupContent, "long: ",Lon," Lat: ",Lat);
+					
+					marker = tomtom.L.marker([Lat,Lon]).addTo(map).bindPopup(popupContent).openPopup();
+					map.setView([Lat,Lon], zoom >= map.getMinZoom() ? zoom : map.getZoom());	
+				}
+			}
+			
+			// Clear rent location information
+			function clear() {
+                resultsList.clear();
+                markersLayer.clearLayers();
+            }
+			
+			
+			
+    </script>
+</body>
+
+</html>
